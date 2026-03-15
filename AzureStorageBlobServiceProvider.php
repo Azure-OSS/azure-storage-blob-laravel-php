@@ -21,9 +21,15 @@ final class AzureStorageBlobServiceProvider extends ServiceProvider
             self::assertStringConfig($config, 'container', required: true);
             self::assertStringConfig($config, 'prefix');
             self::assertStringConfig($config, 'root');
+            self::assertStringConfig($config, 'credential');
+            self::assertStringConfig($config, 'account_key');
+            self::assertStringConfig($config, 'authority_host');
             self::assertStringConfig($config, 'tenant_id');
             self::assertStringConfig($config, 'client_id');
             self::assertStringConfig($config, 'client_secret');
+            self::assertStringConfig($config, 'client_certificate_path');
+            self::assertStringConfig($config, 'client_certificate_password');
+            self::assertStringConfig($config, 'federated_token_file');
             self::assertStringConfig($config, 'endpoint');
             self::assertStringConfig($config, 'endpoint_suffix');
             self::assertStringConfig($config, 'account_name');
@@ -33,16 +39,34 @@ final class AzureStorageBlobServiceProvider extends ServiceProvider
             $hasConnectionString = isset($config['connection_string']);
             $hasEndpoint = isset($config['endpoint']);
             $hasAccountName = isset($config['account_name']);
-            $hasTokenCredentials = isset($config['tenant_id'], $config['client_id'], $config['client_secret'])
-                && ($hasEndpoint || $hasAccountName);
+            $hasEndpointOrAccountName = $hasEndpoint || $hasAccountName;
 
-            if (! $hasConnectionString && ! $hasTokenCredentials) {
+            $hasAnyTokenCredentialConfig =
+                isset($config['credential'])
+                || isset($config['account_key'])
+                || isset($config['authority_host'])
+                || isset($config['tenant_id'])
+                || isset($config['client_id'])
+                || isset($config['client_secret'])
+                || isset($config['client_certificate_path'])
+                || isset($config['client_certificate_password'])
+                || isset($config['federated_token_file']);
+
+            if (! $hasConnectionString && ! $hasEndpointOrAccountName) {
                 throw new \InvalidArgumentException(
-                    'Either [connection_string] or [endpoint, tenant_id, client_id, client_secret] must be provided in the disk configuration.'
+                    'Either [connection_string] or [endpoint/account_name] must be provided in the disk configuration.'
                 );
             }
 
-            if ($hasConnectionString && $hasTokenCredentials) {
+            $hasLegacyClientSecretCredentials = isset($config['tenant_id'], $config['client_id'], $config['client_secret']);
+
+            if (! $hasConnectionString && ! isset($config['credential']) && ! $hasLegacyClientSecretCredentials) {
+                throw new \InvalidArgumentException(
+                    'The [credential] must be provided in the disk configuration when not using [connection_string].'
+                );
+            }
+
+            if ($hasConnectionString && ($hasEndpointOrAccountName || $hasAnyTokenCredentialConfig)) {
                 throw new \InvalidArgumentException(
                     'Cannot use both [connection_string] and token-based credentials in the disk configuration.'
                 );

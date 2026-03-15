@@ -42,6 +42,10 @@ You can read the documentation [here](https://azure-oss.github.io/category/stora
 ],
 ```
 
+## Authentication
+
+Besides shared key via connection string, this driver supports additional authentication methods (like Entra ID / token-based credentials, managed identity, workload identity, and shared key via account key). See the docs for configuration examples: https://azure-oss.github.io/category/storage-blob-laravel/installation
+
 ```php
 use Illuminate\Support\Facades\Storage;
 
