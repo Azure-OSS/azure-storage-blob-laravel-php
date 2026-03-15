@@ -8,10 +8,10 @@ use AzureOss\Identity\AzureAuthorityHosts;
 use AzureOss\Identity\ClientCertificateCredential;
 use AzureOss\Identity\ClientCertificateCredentialOptions;
 use AzureOss\Identity\ClientSecretCredential;
+use AzureOss\Identity\ClientSecretCredentialOptions;
 use AzureOss\Identity\ManagedIdentityCredential;
 use AzureOss\Identity\ManagedIdentityCredentialOptions;
 use AzureOss\Identity\TokenCredential;
-use AzureOss\Identity\TokenCredentialOptions;
 use AzureOss\Identity\WorkloadIdentityCredential;
 use AzureOss\Identity\WorkloadIdentityCredentialOptions;
 use AzureOss\Storage\Blob\BlobServiceClient;
@@ -210,7 +210,7 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
             $tenantId,
             $clientId,
             $clientSecret,
-            new TokenCredentialOptions(authorityHost: $authorityHost ?? AzureAuthorityHosts::AZURE_PUBLIC_CLOUD),
+            new ClientSecretCredentialOptions(authorityHost: $authorityHost ?? AzureAuthorityHosts::AZURE_PUBLIC_CLOUD),
         );
     }
 
