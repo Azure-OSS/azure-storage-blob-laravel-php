@@ -19,6 +19,12 @@ Our other packages:
 - **[azure-oss/storage-blob-flysystem](https://packagist.org/packages/azure-oss/storage-blob-flysystem)** – Flysystem adapter  
   ![Downloads](https://img.shields.io/packagist/dt/azure-oss/storage-blob-flysystem)
 
+- **[azure-oss/storage-queue](https://packagist.org/packages/azure-oss/storage-queue)** – Azure Storage Queue SDK  
+  ![Downloads](https://img.shields.io/packagist/dt/azure-oss/storage-queue)
+
+- **[azure-oss/storage-queue-laravel](https://packagist.org/packages/azure-oss/storage-queue-laravel)** – Laravel Queue connector  
+  ![Downloads](https://img.shields.io/packagist/dt/azure-oss/storage-queue-laravel)
+
 ## Install
 
 ```shell
@@ -42,34 +48,7 @@ You can read the documentation [here](https://azure-oss.github.io/category/stora
 ],
 ```
 
-## Authentication
-
 Besides shared key via connection string, this driver supports additional authentication methods (like Entra ID / token-based credentials, managed identity, workload identity, and shared key via account key). See the docs for configuration examples: https://azure-oss.github.io/category/storage-blob-laravel/installation
-
-```php
-use Illuminate\Support\Facades\Storage;
-
-$disk = Storage::disk('azure');
-
-// Write
-$disk->put('docs/hello.txt', 'Hello from Laravel');
-
-// Read
-$content = $disk->get('docs/hello.txt');
-
-// Exists
-$exists = $disk->exists('docs/hello.txt');
-
-// Copy / move
-$disk->copy('docs/hello.txt', 'docs/hello-copy.txt');
-$disk->move('docs/hello-copy.txt', 'docs/hello-moved.txt');
-
-// List
-$files = $disk->allFiles('docs');
-
-// Delete
-$disk->delete('docs/hello-moved.txt');
-```
 
 ## License
 
