@@ -15,12 +15,16 @@ use AzureOss\Identity\TokenCredential;
 use AzureOss\Identity\WorkloadIdentityCredential;
 use AzureOss\Identity\WorkloadIdentityCredentialOptions;
 use AzureOss\Storage\Blob\BlobServiceClient;
+use AzureOss\Storage\Blob\Models\BlobServiceClientOptions;
 use AzureOss\Storage\BlobFlysystem\AzureBlobStorageAdapter;
 use AzureOss\Storage\Common\Auth\StorageSharedKeyCredential;
+use AzureOss\Storage\Common\Middleware\HttpClientOptions;
+use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Uri;
 use Illuminate\Filesystem\FilesystemAdapter;
 use League\Flysystem\Config;
 use League\Flysystem\Filesystem;
+use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\UriInterface;
 
 /**
@@ -53,7 +57,10 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
      *     container: string,
      *     prefix?: string,
      *     root?: string,
-     *     is_public_container?: bool
+     *     is_public_container?: bool,
+     *     timeout?: int,
+     *     connect_timeout?: int,
+     *     verify_ssl?: bool
      * }  $config
      */
     public function __construct(array $config)
@@ -97,11 +104,16 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
      *     container: string,
      *     prefix?: string,
      *     root?: string,
-     *     is_public_container?: bool
+     *     is_public_container?: bool,
+     *     timeout?: int,
+     *     connect_timeout?: int,
+     *     verify_ssl?: bool
      * }  $config
      */
     private static function createBlobServiceClient(array $config): BlobServiceClient
     {
+        $httpClientOptions = self::createHttpClientOptions($config);
+
         $connectionString = $config['connection_string'] ?? null;
         if ($connectionString !== null && $connectionString !== '') {
             $hasEndpointOrAccountName = isset($config['endpoint']) || isset($config['account_name']);
@@ -120,7 +132,10 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
                 throw new \InvalidArgumentException('Cannot use both [connection_string] and token-based credentials in the disk configuration.');
             }
 
-            return BlobServiceClient::fromConnectionString($connectionString);
+            return BlobServiceClient::fromConnectionString(
+                $connectionString,
+                new BlobServiceClientOptions($httpClientOptions),
+            );
         }
 
         if (! isset($config['endpoint']) && ! isset($config['account_name'])) {
@@ -130,9 +145,26 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
         }
 
         $uri = self::buildBlobEndpointUri($config);
-        $credential = self::createCredential($config);
+        $credential = self::createCredential($config, $httpClientOptions);
 
-        return new BlobServiceClient($uri, $credential);
+        return new BlobServiceClient($uri, $credential, new BlobServiceClientOptions($httpClientOptions));
+    }
+
+    /**
+     * Build the shared HTTP options for both the Blob API calls and the Entra ID
+     * token request. Leaving these unset keeps the previous behaviour (no explicit
+     * timeouts); setting them prevents a slow connection — in particular a stalled
+     * token request to the identity provider — from hanging the caller indefinitely.
+     *
+     * @param  array{timeout?: int, connect_timeout?: int, verify_ssl?: bool}  $config
+     */
+    private static function createHttpClientOptions(array $config): HttpClientOptions
+    {
+        return new HttpClientOptions(
+            timeout: $config['timeout'] ?? null,
+            connectTimeout: $config['connect_timeout'] ?? null,
+            verifySsl: $config['verify_ssl'] ?? null,
+        );
     }
 
     /**
@@ -149,10 +181,15 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
      *     federated_token_file?: string
      * }  $config
      */
-    private static function createCredential(array $config): StorageSharedKeyCredential|TokenCredential
+    private static function createCredential(array $config, HttpClientOptions $httpClientOptions): StorageSharedKeyCredential|TokenCredential
     {
         $authorityHost = $config['authority_host'] ?? null;
         $credentialType = $config['credential'] ?? null;
+
+        // Only build a custom HTTP client for the token request when at least one
+        // HTTP option is configured; otherwise pass null so the credential keeps
+        // using its own auto-discovered client (unchanged default behaviour).
+        $tokenHttpClient = self::createTokenHttpClient($httpClientOptions);
 
         $tenantId = $config['tenant_id'] ?? null;
         $clientId = $config['client_id'] ?? null;
@@ -160,7 +197,7 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
 
         if ($credentialType === null) {
             if ($tenantId !== null && $clientId !== null && $clientSecret !== null) {
-                return self::createClientSecretCredential($config, $authorityHost);
+                return self::createClientSecretCredential($config, $authorityHost, $tokenHttpClient);
             }
 
             throw new \InvalidArgumentException('The [credential] must be provided in the disk configuration when not using [connection_string].');
@@ -168,14 +205,21 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
 
         return match (strtolower($credentialType)) {
             'shared_key' => self::createSharedKeyCredential($config),
-            'client_secret' => self::createClientSecretCredential($config, $authorityHost),
-            'client_certificate' => self::createClientCertificateCredential($config, $authorityHost),
-            'workload_identity' => self::createWorkloadIdentityCredential($config, $authorityHost),
-            'managed_identity' => self::createManagedIdentityCredential($config, $authorityHost),
+            'client_secret' => self::createClientSecretCredential($config, $authorityHost, $tokenHttpClient),
+            'client_certificate' => self::createClientCertificateCredential($config, $authorityHost, $tokenHttpClient),
+            'workload_identity' => self::createWorkloadIdentityCredential($config, $authorityHost, $tokenHttpClient),
+            'managed_identity' => self::createManagedIdentityCredential($config, $authorityHost, $tokenHttpClient),
             default => throw new \InvalidArgumentException(
                 'Unsupported [credential]. Supported values: [shared_key, client_secret, client_certificate, workload_identity, managed_identity].',
             ),
         };
+    }
+
+    private static function createTokenHttpClient(HttpClientOptions $httpClientOptions): ?ClientInterface
+    {
+        $guzzleConfig = $httpClientOptions->toGuzzleHttpClientConfig();
+
+        return $guzzleConfig === [] ? null : new Client($guzzleConfig);
     }
 
     /**
@@ -196,7 +240,7 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
     /**
      * @param  array{tenant_id?: string, client_id?: string, client_secret?: string}  $config
      */
-    private static function createClientSecretCredential(array $config, ?string $authorityHost): ClientSecretCredential
+    private static function createClientSecretCredential(array $config, ?string $authorityHost, ?ClientInterface $httpClient): ClientSecretCredential
     {
         $tenantId = $config['tenant_id'] ?? null;
         $clientId = $config['client_id'] ?? null;
@@ -210,14 +254,17 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
             $tenantId,
             $clientId,
             $clientSecret,
-            new ClientSecretCredentialOptions(authorityHost: $authorityHost ?? AzureAuthorityHosts::AZURE_PUBLIC_CLOUD),
+            new ClientSecretCredentialOptions(
+                authorityHost: $authorityHost ?? AzureAuthorityHosts::AZURE_PUBLIC_CLOUD,
+                httpClient: $httpClient,
+            ),
         );
     }
 
     /**
      * @param  array{tenant_id?: string, client_id?: string, client_certificate_path?: string, client_certificate_password?: string}  $config
      */
-    private static function createClientCertificateCredential(array $config, ?string $authorityHost): ClientCertificateCredential
+    private static function createClientCertificateCredential(array $config, ?string $authorityHost, ?ClientInterface $httpClient): ClientCertificateCredential
     {
         $tenantId = $config['tenant_id'] ?? null;
         $clientId = $config['client_id'] ?? null;
@@ -233,14 +280,17 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
             $clientId,
             $certificatePath,
             $certificatePassword,
-            new ClientCertificateCredentialOptions(authorityHost: $authorityHost ?? AzureAuthorityHosts::AZURE_PUBLIC_CLOUD),
+            new ClientCertificateCredentialOptions(
+                authorityHost: $authorityHost ?? AzureAuthorityHosts::AZURE_PUBLIC_CLOUD,
+                httpClient: $httpClient,
+            ),
         );
     }
 
     /**
      * @param  array{tenant_id?: string, client_id?: string, federated_token_file?: string}  $config
      */
-    private static function createWorkloadIdentityCredential(array $config, ?string $authorityHost): WorkloadIdentityCredential
+    private static function createWorkloadIdentityCredential(array $config, ?string $authorityHost, ?ClientInterface $httpClient): WorkloadIdentityCredential
     {
         $tenantId = $config['tenant_id'] ?? null;
         $clientId = $config['client_id'] ?? null;
@@ -252,6 +302,7 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
                 clientId: $clientId,
                 tenantId: $tenantId,
                 tokenFilePath: $tokenFilePath,
+                httpClient: $httpClient,
             )
         );
     }
@@ -259,7 +310,7 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
     /**
      * @param  array{client_id?: string}  $config
      */
-    private static function createManagedIdentityCredential(array $config, ?string $authorityHost): ManagedIdentityCredential
+    private static function createManagedIdentityCredential(array $config, ?string $authorityHost, ?ClientInterface $httpClient): ManagedIdentityCredential
     {
         $clientId = $config['client_id'] ?? null;
 
@@ -267,6 +318,7 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
             new ManagedIdentityCredentialOptions(
                 authorityHost: $authorityHost ?? AzureAuthorityHosts::AZURE_PUBLIC_CLOUD,
                 clientId: $clientId,
+                httpClient: $httpClient,
             )
         );
     }

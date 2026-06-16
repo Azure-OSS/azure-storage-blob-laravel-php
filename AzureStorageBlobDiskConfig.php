@@ -31,7 +31,10 @@ final class AzureStorageBlobDiskConfig
      *     container: string,
      *     prefix?: string,
      *     root?: string,
-     *     is_public_container?: bool
+     *     is_public_container?: bool,
+     *     timeout?: int,
+     *     connect_timeout?: int,
+     *     verify_ssl?: bool
      * } $config
      */
     public static function validate(array &$config): void
@@ -53,6 +56,9 @@ final class AzureStorageBlobDiskConfig
         self::assertString($config, 'account_name');
         self::assertString($config, 'connection_string');
         self::assertBool($config, 'is_public_container');
+        self::assertInt($config, 'timeout');
+        self::assertInt($config, 'connect_timeout');
+        self::assertBool($config, 'verify_ssl');
     }
 
     /**
@@ -88,6 +94,24 @@ final class AzureStorageBlobDiskConfig
 
         if (! is_bool($config[$key])) {
             throw new \InvalidArgumentException("The [{$key}] must be a boolean in the disk configuration.");
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     */
+    private static function assertInt(array $config, string $key, bool $required = false): void
+    {
+        if (! array_key_exists($key, $config) || $config[$key] === null) {
+            if ($required) {
+                throw new \InvalidArgumentException("The [{$key}] must be an integer in the disk configuration.");
+            }
+
+            return;
+        }
+
+        if (! is_int($config[$key])) {
+            throw new \InvalidArgumentException("The [{$key}] must be an integer in the disk configuration.");
         }
     }
 }
