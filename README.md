@@ -13,8 +13,11 @@ We picked up where they left off.
 
 Our other packages:
 
-- **[azure-oss/storage](https://packagist.org/packages/azure-oss/storage)** – Azure Blob Storage SDK  
+- **[azure-oss/storage](https://packagist.org/packages/azure-oss/storage)** – Meta package with Blob + Queue SDKs  
   ![Downloads](https://img.shields.io/packagist/dt/azure-oss/storage)
+
+- **[azure-oss/storage-blob](https://packagist.org/packages/azure-oss/storage-blob)** – Azure Blob Storage SDK  
+  ![Downloads](https://img.shields.io/packagist/dt/azure-oss/storage-blob)
 
 - **[azure-oss/storage-blob-flysystem](https://packagist.org/packages/azure-oss/storage-blob-flysystem)** – Flysystem adapter  
   ![Downloads](https://img.shields.io/packagist/dt/azure-oss/storage-blob-flysystem)
@@ -52,4 +55,4 @@ Besides shared key via connection string, this driver supports additional authen
 
 ## License
 
-This project is released under the MIT License. See [LICENSE](https://github.com/Azure-OSS/azure-storage-php-monorepo/blob/02759360186be8d2d04bd1e9b2aba3839b6d39dc/LICENSE) for details.
+This project is released under the MIT License. See [LICENSE](https://github.com/Azure-OSS/azure-storage-monorepo/blob/main/LICENSE) for details.
