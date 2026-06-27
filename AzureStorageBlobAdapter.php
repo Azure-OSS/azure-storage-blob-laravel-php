@@ -57,6 +57,8 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
      *     container: string,
      *     prefix?: string,
      *     root?: string,
+     *     url?: string,
+     *     temporary_url?: string,
      *     is_public_container?: bool,
      *     timeout?: int,
      *     connect_timeout?: int,
@@ -104,6 +106,8 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
      *     container: string,
      *     prefix?: string,
      *     root?: string,
+     *     url?: string,
+     *     temporary_url?: string,
      *     is_public_container?: bool,
      *     timeout?: int,
      *     connect_timeout?: int,
@@ -341,6 +345,14 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
 
     public function url($path)
     {
+        $url = $this->config['url'] ?? null;
+        if (is_string($url)) {
+            return $this->concatPathToUrl(
+                $url,
+                $this->prefixer->prefixPath($path),
+            );
+        }
+
         return $this->adapter->publicUrl($path, new Config);
     }
 
@@ -364,11 +376,13 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
     /** @phpstan-ignore-next-line */
     public function temporaryUrl($path, $expiration, array $options = [])
     {
-        return $this->adapter->temporaryUrl(
+        $url = $this->adapter->temporaryUrl(
             $path,
             $expiration,
             new Config(array_merge(['permissions' => 'r'], $options)),
         );
+
+        return $this->replaceTemporaryUrlOrigin($url);
     }
 
     /**
@@ -386,6 +400,7 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
             $expiration,
             new Config(array_merge(['permissions' => 'cw'], $options)),
         );
+        $url = $this->replaceTemporaryUrlOrigin($url);
         $contentType = isset($options['content-type']) && is_string($options['content-type'])
             ? $options['content-type']
             : 'application/octet-stream';
@@ -397,5 +412,15 @@ final class AzureStorageBlobAdapter extends FilesystemAdapter
                 'Content-Type' => $contentType,
             ],
         ];
+    }
+
+    private function replaceTemporaryUrlOrigin(string $url): string
+    {
+        $temporaryUrl = $this->config['temporary_url'] ?? null;
+        if (! is_string($temporaryUrl)) {
+            return $url;
+        }
+
+        return (string) $this->replaceBaseUrl(new Uri($url), $temporaryUrl);
     }
 }

@@ -31,6 +31,8 @@ final class AzureStorageBlobDiskConfig
      *     container: string,
      *     prefix?: string,
      *     root?: string,
+     *     url?: string,
+     *     temporary_url?: string,
      *     is_public_container?: bool,
      *     timeout?: int,
      *     connect_timeout?: int,
@@ -42,6 +44,8 @@ final class AzureStorageBlobDiskConfig
         self::assertString($config, 'container', required: true);
         self::assertString($config, 'prefix');
         self::assertString($config, 'root');
+        self::assertString($config, 'url');
+        self::assertString($config, 'temporary_url');
         self::assertString($config, 'credential');
         self::assertString($config, 'account_key');
         self::assertString($config, 'authority_host');
