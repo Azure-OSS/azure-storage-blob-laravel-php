@@ -10,6 +10,6 @@ Update your Composer constraint:
 composer require azure-oss/storage-blob-laravel:^2.0
 ```
 
-This release also requires `azure-oss/storage-blob-flysystem:^2.0`. Composer will update that dependency automatically unless your application requires `azure-oss/storage-blob-flysystem` directly, in which case update that constraint too.
+This release also requires `azure-oss/storage-blob-flysystem:^2.2`. Composer will update that dependency automatically unless your application requires `azure-oss/storage-blob-flysystem` directly, in which case update that constraint too.
 
 No code changes are required for this upgrade.

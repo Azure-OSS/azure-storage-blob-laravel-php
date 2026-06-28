@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The package now requires `azure-oss/storage-blob-flysystem:^2.2`.
+
 ## 2.1.0
 
 Changes since `2.0.0`.
